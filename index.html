@@ -201,33 +201,19 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated;}
 @keyframes pvpPop{0%{transform:translate(-50%,-50%) scale(0);}60%{transform:translate(-50%,-50%) scale(1.1);}100%{transform:translate(-50%,-50%) scale(1);}}
 @keyframes pvpWaitDot{0%,100%{opacity:.2;transform:scale(1);}50%{opacity:1;transform:scale(1.3);}}
 </style>
-<!-- ══ GameMonetize SDK ══ -->
+<!-- ══ CrazyGames SDK ══ -->
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
 <script>
-  window.SDK_OPTIONS = {
-    gameId: 'gc1j5t3zg3v5402m47cjdizybppg6llu',  // ← GameMonetize'den aldığın gameId buraya
-    onEvent: function(event) {
-      switch(event.name) {
-        case 'SDK_GAME_START':
-          // Reklam bitti → oyunu devam ettir, sesi aç
-          if(window._gmAdResolve) { window._gmAdResolve(true); window._gmAdResolve=null; }
-          break;
-        case 'SDK_GAME_PAUSE':
-          // Reklam başladı → oyunu durdur, sesi kapat
-          break;
-        case 'SDK_REWARDED_WATCH_COMPLETE':
-          // Ödüllü reklam tamamlandı → kalp ver
-          if(window._gmAdResolve) { window._gmAdResolve(true); window._gmAdResolve=null; }
-          break;
-        case 'SDK_REWARDED_WATCH_INCOMPLETE':
-        case 'SDK_ERROR':
-          // Reklam atlandı veya hata → ödül verme
-          if(window._gmAdResolve) { window._gmAdResolve(false); window._gmAdResolve=null; }
-          break;
-      }
+  // CrazyGames SDK başlat
+  window.addEventListener('load', async () => {
+    try {
+      await window.CrazyGames.SDK.init();
+      window._cgSDKReady = true;
+    } catch(e) {
+      console.log('CrazyGames SDK init failed:', e);
     }
-  };
+  });
 </script>
-<script src="https://api.gamemonetize.com/gmapi.js"></script>
 </head>
 <body>
 <div id="rotateMsg"><div style="font-size:36px">📱</div><div>TELEFONU YAN TUT</div><div style="font-size:6px;color:#aaa;margin-top:4px">YATAY MOD GEREKLİ</div></div>
@@ -4599,20 +4585,34 @@ function getAdCooldown(){ return parseInt(localStorage.getItem(AD_COOLDOWN_KEY)|
 function setAdCooldown(){ localStorage.setItem(AD_COOLDOWN_KEY, Date.now()+5*60*1000); }
 
 function showRewardedAd(){
-  return new Promise((resolve)=>{
-    // GameMonetize SDK yüklüyse gerçek reklam göster
-    if(typeof sdk !== 'undefined' && sdk.showRewardedAd){
-      window._gmAdResolve = resolve;
-      sdk.showRewardedAd();
-    } else {
-      // SDK yüklenemedi → sahte reklam (5sn)
-      let c=5;
-      const iv=setInterval(()=>{
-        c--;
-        const btn=document.getElementById('btnAdHeart');
-        if(btn) btn.textContent=`📺 Reklam bitiyor... (${c}s)`;
-        if(c<=0){ clearInterval(iv); resolve(true); }
-      },1000);
+  return new Promise(async (resolve)=>{
+    try {
+      const sdk = window.CrazyGames?.SDK;
+      if(sdk){
+        // SDK hazır değilse init et
+        if(!window._cgSDKReady){
+          await sdk.init();
+          window._cgSDKReady = true;
+        }
+        const callbacks = {
+          adFinished: () => resolve(true),
+          adError: (e) => { console.log('Ad error:', e); resolve(false); },
+          adStarted: () => {},
+        };
+        sdk.ad.requestAd('rewarded', callbacks);
+      } else {
+        // SDK yok (localhost/test) → 5sn sahte
+        let c=5;
+        const iv=setInterval(()=>{
+          c--;
+          const btn=document.getElementById('btnAdHeart');
+          if(btn) btn.textContent=`📺 Reklam bitiyor... (${c}s)`;
+          if(c<=0){ clearInterval(iv); resolve(true); }
+        },1000);
+      }
+    } catch(e){
+      console.log('Ad exception:', e);
+      resolve(false);
     }
   });
 }
